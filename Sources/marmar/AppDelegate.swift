@@ -1,0 +1,142 @@
+import AppKit
+import AVFoundation
+import ApplicationServices
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private let hotKey = HotKey()
+    private let dictation = DictationController()
+    private var statusLine = "Starting…"
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        setupMenuBar()
+        wireDictation()
+
+        requestMicrophoneAccess { [weak self] granted in
+            guard let self else { return }
+            if granted {
+                self.dictation.prepare()
+            } else {
+                self.statusLine = "Microphone access denied"
+                self.render()
+            }
+        }
+
+        setupHotKey()
+    }
+
+    // MARK: - UI
+
+    private func setupMenuBar() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        setIcon(recording: false)
+        rebuildMenu()
+    }
+
+    private func setIcon(recording: Bool) {
+        let name = recording ? "mic.fill" : "mic"
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: "marmar")
+        image?.isTemplate = true
+        statusItem.button?.image = image
+    }
+
+    private func rebuildMenu() {
+        let menu = NSMenu()
+
+        let status = NSMenuItem(title: statusLine, action: nil, keyEquivalent: "")
+        status.isEnabled = false
+        menu.addItem(status)
+
+        menu.addItem(.separator())
+
+        let hint = NSMenuItem(title: "Hold Right-⌘ + Right-⌥ to dictate", action: nil, keyEquivalent: "")
+        hint.isEnabled = false
+        menu.addItem(hint)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "Quit marmar", action: #selector(quit), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+
+        statusItem.menu = menu
+    }
+
+    private func render() {
+        rebuildMenu()
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+
+    // MARK: - Wiring
+
+    private func wireDictation() {
+        dictation.onStateChange = { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .idle: self.statusLine = "Idle"
+            case .preparingModel: self.statusLine = "Downloading speech model…"
+            case .ready: self.statusLine = "Ready"
+            case .recording:
+                self.statusLine = "Listening…"
+                self.setIcon(recording: true)
+            case .transcribing: self.statusLine = "Transcribing…"
+            case .unavailable(let why): self.statusLine = why
+            }
+            if case .recording = state {} else {
+                self.setIcon(recording: false)
+            }
+            self.render()
+        }
+
+        dictation.onLiveText = { [weak self] text in
+            guard let self else { return }
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.statusLine = trimmed.isEmpty ? "Listening…" : "“\(trimmed.suffix(40))”"
+            self.render()
+        }
+
+        dictation.onFinalText = { text in
+            TextInserter.insert(text)
+        }
+    }
+
+    private func setupHotKey() {
+        hotKey.onDown = { [weak self] in
+            Task { @MainActor in self?.dictation.begin() }
+        }
+        hotKey.onUp = { [weak self] in
+            Task { @MainActor in self?.dictation.end() }
+        }
+
+        if !hotKey.start() {
+            // No Accessibility permission yet: prompt and inform the user.
+            statusLine = "Grant Accessibility, then relaunch"
+            render()
+            promptForAccessibility()
+        }
+    }
+
+    // MARK: - Permissions
+
+    private func requestMicrophoneAccess(_ completion: @escaping (Bool) -> Void) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            completion(true)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async { completion(granted) }
+            }
+        default:
+            completion(false)
+        }
+    }
+
+    private func promptForAccessibility() {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+}
