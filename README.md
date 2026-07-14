@@ -32,19 +32,21 @@ Headless sanity check (records the mic for N seconds and prints the transcript):
 .build/marmar.app/Contents/MacOS/marmar --record 8
 ```
 
-## Run at login (background daemon)
+## Run at login
 
 ```sh
-./install.sh     # builds, copies to ~/Applications, registers a launchd agent
-./uninstall.sh   # stops and removes it
+./install.sh     # builds, copies to ~/Applications, enables launch-at-login, starts it
+./uninstall.sh   # disables launch-at-login and removes it
 ```
 
-`install.sh` writes a per-user LaunchAgent (`~/Library/LaunchAgents/com.eneko.marmar.plist`)
-that starts marmar at every login and relaunches it if it crashes — but *not*
-when you Quit from the menu (`KeepAlive → SuccessfulExit: false`). Logs go to
-`/tmp/marmar.{out,err}.log`. Because the installed copy has a different code
-signature than your dev build, you may need to re-grant Microphone +
-Accessibility to the `~/Applications` copy the first time.
+Launch-at-login uses `SMAppService` (a self-contained login item) — toggle it
+any time from the menu-bar icon ▸ **Settings… ▸ Service status ▸ Start marmar at
+login**. macOS may list it under System Settings ▸ General ▸ Login Items as
+"needs approval" the first time. Because the installed copy has a different code
+signature than a dev build, you may need to re-grant Microphone + Accessibility.
+
+(Earlier versions used a hand-rolled LaunchAgent; `install.sh` migrates away from
+it automatically.)
 
 ## Download a prebuilt release
 
