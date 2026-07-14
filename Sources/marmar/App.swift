@@ -18,6 +18,16 @@ struct Main {
             return
         }
 
+        // `marmar --settings` opens just the preferences window (no menu bar).
+        if args.contains("--settings") {
+            let app = NSApplication.shared
+            let delegate = SettingsOnlyDelegate()
+            app.delegate = delegate
+            app.setActivationPolicy(.regular)
+            app.run()
+            return
+        }
+
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

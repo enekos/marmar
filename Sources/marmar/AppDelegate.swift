@@ -7,11 +7,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let hotKey = HotKey()
     private let dictation = DictationController()
+    private let settingsWindow = SettingsWindowController()
     private var statusLine = "Starting…"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         wireDictation()
+
+        // Apply persisted settings now, and re-apply whenever they change.
+        applySettings(Settings.shared)
+        Settings.shared.onChange = { [weak self] s in
+            Task { @MainActor in self?.applySettings(s) }
+        }
 
         requestMicrophoneAccess { [weak self] granted in
             guard let self else { return }
@@ -50,11 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let hint = NSMenuItem(title: "Hold Right-⌘ + Right-⌥ to dictate", action: nil, keyEquivalent: "")
+        let hint = NSMenuItem(title: "Hold \(Settings.shared.hotkey.label) to dictate", action: nil, keyEquivalent: "")
         hint.isEnabled = false
         menu.addItem(hint)
 
         menu.addItem(.separator())
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
 
         let quit = NSMenuItem(title: "Quit marmar", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -67,8 +78,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
     }
 
+    @objc private func openSettings() {
+        settingsWindow.show()
+    }
+
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - Settings
+
+    private func applySettings(_ s: Settings) {
+        hotKey.requiredMask = s.hotkey.mask
+        dictation.setLocale(s.locale)
+        render() // refresh the hotkey hint in the menu
     }
 
     // MARK: - Wiring
@@ -83,7 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .recording:
                 self.statusLine = "Listening…"
                 self.setIcon(recording: true)
-            case .transcribing: self.statusLine = "Transcribing…"
+                if Settings.shared.soundFeedback { NSSound(named: "Tink")?.play() }
+            case .transcribing:
+                self.statusLine = "Transcribing…"
+                if Settings.shared.soundFeedback { NSSound(named: "Pop")?.play() }
             case .unavailable(let why): self.statusLine = why
             }
             if case .recording = state {} else {
@@ -100,7 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         dictation.onFinalText = { text in
-            TextInserter.insert(text)
+            let out = Settings.shared.trailingSpace ? text + " " : text
+            TextInserter.insert(out)
         }
     }
 

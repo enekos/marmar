@@ -17,6 +17,7 @@ final class DictationController {
     private let audio = AudioCapture()
     private var transcriber: LiveTranscriber?
     private var starting = false
+    private var locale = Locale.current
 
     /// Fired on state changes so the UI can update.
     var onStateChange: ((State) -> Void)?
@@ -30,11 +31,18 @@ final class DictationController {
         onStateChange?(newState)
     }
 
+    /// Switch dictation language. No-op if unchanged; re-prepares otherwise.
+    func setLocale(_ newLocale: Locale) {
+        guard newLocale.identifier != locale.identifier else { return }
+        locale = newLocale
+        prepare()
+    }
+
     /// Download the locale model up front so the first dictation is instant.
     func prepare() {
         setState(.preparingModel)
         Task {
-            let t = LiveTranscriber(locale: Locale.current)
+            let t = LiveTranscriber(locale: locale)
             do {
                 try await t.ensureModel()
                 setState(.ready)
@@ -59,7 +67,7 @@ final class DictationController {
         guard !starting else { return }
         starting = true
 
-        let t = LiveTranscriber(locale: Locale.current)
+        let t = LiveTranscriber(locale: locale)
         t.onLiveUpdate = { [weak self] text in
             self?.onLiveText?(text)
         }

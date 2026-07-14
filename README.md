@@ -76,6 +76,14 @@ current locale (one time; the menu shows "Downloading speech model…").
 - **Release** → the finalized text is pasted into the focused app. Your previous
   clipboard contents are saved and restored.
 - **Quit** from the menu (or ⌘Q while the menu is open).
+- **Settings…** in the menu (or ⌘,) opens a small preferences window:
+  - **Language** — system default, or any on-device locale
+  - **Dictation hotkey** — Right ⌘+⌥ / Right ⌥ / Right ⌃ / Right ⌘+⌃
+  - **Add a trailing space** after each transcript
+  - **Sound feedback** when listening starts/stops
+
+  Changes apply immediately and persist across launches. You can also open just
+  the settings window headlessly with `marmar --settings`.
 
 ## How it works
 
