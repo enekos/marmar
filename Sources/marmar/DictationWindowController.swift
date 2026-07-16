@@ -44,7 +44,9 @@ final class DictationWindowController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.becomesKeyOnlyIfNeeded = true
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .moveToActiveSpace]
+        // NB: .canJoinAllSpaces and .moveToActiveSpace are mutually exclusive —
+        // combining them hangs AppKit. Show on all spaces + over fullscreen apps.
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.panel = panel
         return panel
     }

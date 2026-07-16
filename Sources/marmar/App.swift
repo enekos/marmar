@@ -30,6 +30,18 @@ struct Main {
             return
         }
 
+        // `marmar --hud-demo` shows the dictation HUD with a simulated mic
+        // signal and streaming sample text — a permission-free way to preview
+        // the GUI without holding the hotkey.
+        if args.contains("--hud-demo") {
+            let app = NSApplication.shared
+            let delegate = HudDemoDelegate()
+            app.delegate = delegate
+            app.setActivationPolicy(.regular)
+            app.run()
+            return
+        }
+
         // `marmar --settings` opens just the preferences window (no menu bar).
         if args.contains("--settings") {
             let app = NSApplication.shared
