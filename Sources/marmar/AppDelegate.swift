@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKey = HotKey()
     private let dictation = DictationController()
     private let settingsWindow = SettingsWindowController()
+    private let dictationState = DictationState()
+    private lazy var dictationWindow = DictationWindowController(state: dictationState)
     private var statusLine = "Starting…"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -63,6 +65,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let window = NSMenuItem(title: "Show Dictation Window", action: #selector(showDictationWindow), keyEquivalent: "d")
+        window.target = self
+        menu.addItem(window)
+
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -80,6 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openSettings() {
         settingsWindow.show()
+    }
+
+    @objc private func showDictationWindow() {
+        dictationWindow.show()
     }
 
     @objc private func quit() {
@@ -106,26 +116,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .recording:
                 self.statusLine = "Listening…"
                 self.setIcon(recording: true)
+                self.dictationState.transcript = ""
+                self.dictationState.isRecording = true
+                self.dictationWindow.show()
                 if Settings.shared.soundFeedback { NSSound(named: "Tink")?.play() }
             case .transcribing:
                 self.statusLine = "Transcribing…"
+                self.dictationState.isRecording = false
+                self.dictationState.level = 0
                 if Settings.shared.soundFeedback { NSSound(named: "Pop")?.play() }
             case .unavailable(let why): self.statusLine = why
             }
             if case .recording = state {} else {
                 self.setIcon(recording: false)
+                self.dictationState.isRecording = false
             }
+            self.dictationState.status = self.statusLine
             self.render()
         }
 
         dictation.onLiveText = { [weak self] text in
             guard let self else { return }
+            self.dictationState.transcript = text
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             self.statusLine = trimmed.isEmpty ? "Listening…" : "“\(trimmed.suffix(40))”"
             self.render()
         }
 
-        dictation.onFinalText = { text in
+        dictation.onLevel = { [weak self] level in
+            self?.dictationState.pushLevel(level)
+        }
+
+        dictation.onFinalText = { [weak self] text in
+            self?.dictationState.transcript = text
             let out = Settings.shared.trailingSpace ? text + " " : text
             TextInserter.insert(out)
         }

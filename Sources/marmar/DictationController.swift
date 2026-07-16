@@ -25,6 +25,8 @@ final class DictationController {
     var onLiveText: ((String) -> Void)?
     /// Fired with the final transcript when a recording completes.
     var onFinalText: ((String) -> Void)?
+    /// Fired with the normalized mic input level (0…1) while recording.
+    var onLevel: ((Float) -> Void)?
 
     private func setState(_ newState: State) {
         state = newState
@@ -72,6 +74,9 @@ final class DictationController {
             self?.onLiveText?(text)
         }
         transcriber = t
+        audio.onLevel = { [weak self] level in
+            self?.onLevel?(level)
+        }
 
         Task {
             do {
@@ -106,6 +111,7 @@ final class DictationController {
         }
 
         audio.stop()
+        onLevel?(0)
         setState(.transcribing)
         guard let t = transcriber else { setState(.ready); return }
 
