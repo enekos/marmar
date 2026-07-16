@@ -18,6 +18,28 @@ struct Main {
             return
         }
 
+        // Login-item management (used by install.sh / uninstall.sh).
+        if args.contains("--register-login") {
+            let err = LoginItem.setEnabled(true)
+            FileHandle.standardError.write(Data("[marmar] login item: \(err ?? LoginItem.statusText)\n".utf8))
+            return
+        }
+        if args.contains("--unregister-login") {
+            let err = LoginItem.setEnabled(false)
+            FileHandle.standardError.write(Data("[marmar] login item: \(err ?? "removed")\n".utf8))
+            return
+        }
+
+        // `marmar --settings` opens just the preferences window (no menu bar).
+        if args.contains("--settings") {
+            let app = NSApplication.shared
+            let delegate = SettingsOnlyDelegate()
+            app.delegate = delegate
+            app.setActivationPolicy(.regular)
+            app.run()
+            return
+        }
+
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

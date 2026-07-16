@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build marmar, install it to ~/Applications, and register a launchd login agent
-# so it starts automatically at login and relaunches if it crashes.
+# Build marmar, install it to ~/Applications, and enable "start at login" via
+# SMAppService (managed from the app itself / the Settings window).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -8,8 +8,7 @@ LABEL="com.eneko.marmar"
 APP_SRC=".build/marmar.app"
 INSTALL_DIR="$HOME/Applications"
 APP_DST="$INSTALL_DIR/marmar.app"
-PLIST_SRC="packaging/$LABEL.plist"
-PLIST_DST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LEGACY_PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
 
 echo "→ building"
@@ -20,22 +19,25 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "$APP_DST"
 cp -R "$APP_SRC" "$APP_DST"
 
-echo "→ writing launch agent to $PLIST_DST"
-mkdir -p "$HOME/Library/LaunchAgents"
-sed "s|__BINARY__|$APP_DST/Contents/MacOS/marmar|g" "$PLIST_SRC" > "$PLIST_DST"
+# Migrate away from the old hand-rolled LaunchAgent, if present, so we don't
+# double-launch alongside the SMAppService login item.
+if [ -f "$LEGACY_PLIST" ]; then
+    echo "→ removing legacy LaunchAgent"
+    launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+    rm -f "$LEGACY_PLIST"
+fi
 
-echo "→ (re)loading launch agent"
-launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
-launchctl bootstrap "$DOMAIN" "$PLIST_DST"
-launchctl enable "$DOMAIN/$LABEL"
-launchctl kickstart -k "$DOMAIN/$LABEL"
+echo "→ enabling launch at login"
+"$APP_DST/Contents/MacOS/marmar" --register-login || true
+
+echo "→ starting marmar"
+open "$APP_DST"
 
 echo
-echo "✓ marmar installed and running as a login agent."
-echo "  It will start automatically at every login."
-echo "  Logs: /tmp/marmar.out.log  /tmp/marmar.err.log"
+echo "✓ marmar installed, started, and set to launch at login."
+echo "  Manage everything from the menu-bar icon ▸ Settings… (⌘,)"
 echo "  Uninstall: ./uninstall.sh"
 echo
-echo "  NOTE: because the code signature changed, you may need to re-grant"
-echo "  Accessibility (and Microphone) to the copy in ~/Applications the first"
-echo "  time — System Settings ▸ Privacy & Security."
+echo "  If macOS shows marmar under Login Items as 'needs approval', enable it"
+echo "  in System Settings ▸ General ▸ Login Items. Re-grant Microphone +"
+echo "  Accessibility if prompted (the code signature changed)."
