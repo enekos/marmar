@@ -29,8 +29,20 @@ final class DictationController {
     var onLevel: ((Float) -> Void)?
 
     private func setState(_ newState: State) {
+        Log.log("[dictation] state: \(label(state)) → \(label(newState))")
         state = newState
         onStateChange?(newState)
+    }
+
+    private func label(_ s: State) -> String {
+        switch s {
+        case .idle: return "idle"
+        case .preparingModel: return "preparingModel"
+        case .ready: return "ready"
+        case .recording: return "recording"
+        case .transcribing: return "transcribing"
+        case .unavailable(let w): return "unavailable(\(w))"
+        }
     }
 
     /// Switch dictation language. No-op if unchanged; re-prepares otherwise.
@@ -58,15 +70,21 @@ final class DictationController {
 
     /// Hotkey pressed — begin recording.
     func begin() {
+        Log.log("[dictation] begin() requested (state=\(label(state)), starting=\(starting))")
         switch state {
         case .recording, .transcribing, .preparingModel:
+            Log.log("[dictation] begin() IGNORED — busy in \(label(state))")
             return
-        case .unavailable:
+        case .unavailable(let why):
+            Log.log("[dictation] begin() IGNORED — unavailable: \(why)")
             return
         default:
             break
         }
-        guard !starting else { return }
+        guard !starting else {
+            Log.log("[dictation] begin() IGNORED — already starting")
+            return
+        }
         starting = true
 
         let t = LiveTranscriber(locale: locale)
@@ -86,6 +104,7 @@ final class DictationController {
                 }
                 setState(.recording)
             } catch {
+                Log.log("[dictation] start FAILED: \(error.localizedDescription)")
                 setState(.unavailable("Recording failed: \(error.localizedDescription)"))
                 _ = await t.finish()
                 transcriber = nil
@@ -94,8 +113,18 @@ final class DictationController {
         }
     }
 
+    /// External trigger (SIGUSR1, menu item) — start recording if idle, stop if recording.
+    func toggle() {
+        if case .recording = state {
+            end()
+        } else {
+            begin()
+        }
+    }
+
     /// Hotkey released — stop recording, transcribe, emit final text.
     func end() {
+        Log.log("[dictation] end() requested (state=\(label(state)), starting=\(starting))")
         guard case .recording = state else {
             // If we were still starting, wait for it then stop.
             if starting {
@@ -118,6 +147,7 @@ final class DictationController {
         Task {
             let text = await t.finish()
             transcriber = nil
+            Log.log("[dictation] finish returned \(text.count) chars\(text.isEmpty ? " (EMPTY)" : "")")
             if !text.isEmpty {
                 onFinalText?(text)
             }

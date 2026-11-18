@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusLine = "Starting…"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Log.log("[app] launched (v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"))")
         setupMenuBar()
         wireDictation()
 
@@ -24,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         requestMicrophoneAccess { [weak self] granted in
             guard let self else { return }
+            Log.log("[app] microphone access granted=\(granted)")
             if granted {
                 self.dictation.prepare()
             } else {
@@ -33,6 +35,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupHotKey()
+        setupToggleSignal()
+    }
+
+    /// SIGUSR1 toggles dictation, so external launchers (Raycast, skhd, …) can
+    /// drive push-to-talk as tap-to-start/tap-to-stop: `pkill -USR1 -x marmar`.
+    private func setupToggleSignal() {
+        signal(SIGUSR1, SIG_IGN)
+        let src = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        src.setEventHandler { [weak self] in
+            Task { @MainActor in self?.dictation.toggle() }
+        }
+        src.resume()
     }
 
     // MARK: - UI
@@ -65,6 +79,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        let toggle = NSMenuItem(title: "Toggle Dictation", action: #selector(toggleDictation), keyEquivalent: "t")
+        toggle.target = self
+        menu.addItem(toggle)
+
         let window = NSMenuItem(title: "Show Dictation Window", action: #selector(showDictationWindow), keyEquivalent: "d")
         window.target = self
         menu.addItem(window)
@@ -90,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showDictationWindow() {
         dictationWindow.show()
+    }
+
+    @objc private func toggleDictation() {
+        dictation.toggle()
     }
 
     @objc private func quit() {
@@ -164,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if !hotKey.start() {
             // No Accessibility permission yet: prompt and inform the user.
+            Log.log("[app] hotkey start failed — prompting for Accessibility")
             statusLine = "Grant Accessibility, then relaunch"
             render()
             promptForAccessibility()

@@ -12,6 +12,14 @@ struct Main {
         // Headless test/CLI path: `marmar --record [seconds]` records the mic
         // and prints the transcript, then exits (no menu bar).
         let args = CommandLine.arguments
+
+        // `marmar --logs` prints the debug log (and its path) and exits.
+        if args.contains("--logs") {
+            print("log file: \(Log.path)\n")
+            Log.dump()
+            return
+        }
+
         if let idx = args.firstIndex(of: "--record") {
             let seconds = (idx + 1 < args.count ? Double(args[idx + 1]) : nil) ?? 6.0
             HeadlessRecorder.run(seconds: seconds)

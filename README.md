@@ -1,7 +1,7 @@
 # marmar
 
 A lightweight, **fully on-device** push-to-talk dictation tool for macOS 26+.
-Hold **Right-Option**, speak, release — the transcript is pasted at your cursor.
+Hold **Right-Command + Right-Shift**, speak, release — the transcript is pasted at your cursor.
 
 Think "ghostpepper, but minimal": no cloud, no accounts, no LLM reformatting.
 Just Apple's new [`SpeechAnalyzer` / `SpeechTranscriber`](https://get-inscribe.com/blog/apple-speech-api-benchmark.html)
@@ -73,14 +73,14 @@ current locale (one time; the menu shows "Downloading speech model…").
 
 ## Usage
 
-- **Hold Right-Option** → the icon fills in and the menu shows a live partial
+- **Hold Right-Command + Right-Shift** → the icon fills in and the menu shows a live partial
   transcript.
 - **Release** → the finalized text is pasted into the focused app. Your previous
   clipboard contents are saved and restored.
 - **Quit** from the menu (or ⌘Q while the menu is open).
 - **Settings…** in the menu (or ⌘,) opens a small preferences window:
   - **Language** — system default, or any on-device locale
-  - **Dictation hotkey** — Right ⌘+⌥ / Right ⌥ / Right ⌃ / Right ⌘+⌃
+  - **Dictation hotkey** — Right ⌘+⇧ / Right ⌘+⌥ / Right ⌘+⌃ / Right ⌥ / Right ⌃
   - **Add a trailing space** after each transcript
   - **Sound feedback** when listening starts/stops
 
@@ -92,7 +92,7 @@ current locale (one time; the menu shows "Downloading speech model…").
 | Piece | File |
 |-------|------|
 | Menu bar app + permissions | `AppDelegate.swift` |
-| Hold-to-talk hotkey (CGEventTap on Right-Option) | `HotKey.swift` |
+| Hold-to-talk hotkey (CGEventTap on right-side modifiers) | `HotKey.swift` |
 | Mic capture (AVAudioEngine) | `AudioCapture.swift` |
 | On-device recognition (SpeechAnalyzer) | `LiveTranscriber.swift` |
 | Session coordination | `DictationController.swift` |
@@ -104,8 +104,6 @@ the final transcript (skipping this hangs the pipeline — a documented footgun)
 
 ## Tweaks
 
-- **Different hotkey**: change `targetKeyCode` in `HotKey.swift`
-  (58 = Left-Option, 54 = Right-Command, …).
 - **Different language**: it follows `Locale.current`. `SpeechTranscriber`
   supports ~30 locales on-device.
 - **Keep clipboard untouched**: swap `TextInserter` for a keystroke-synthesis

@@ -10,15 +10,17 @@ final class Settings {
     /// Preset hold-to-talk chords, mapped to CoreGraphics device-flag masks
     /// (left/right aware — see `HotKey.Mod`).
     enum HotkeyPreset: String, CaseIterable, Identifiable {
+        case rightCmdShift
         case rightCmdOption
+        case rightCmdControl
         case rightOption
         case rightControl
-        case rightCmdControl
 
         var id: String { rawValue }
 
         var label: String {
             switch self {
+            case .rightCmdShift:   return "Right ⌘ + Right ⇧"
             case .rightCmdOption:  return "Right ⌘ + Right ⌥"
             case .rightOption:     return "Right ⌥"
             case .rightControl:    return "Right ⌃"
@@ -28,6 +30,7 @@ final class Settings {
 
         var mask: UInt64 {
             switch self {
+            case .rightCmdShift:   return HotKey.Mod.rightCommand | HotKey.Mod.rightShift
             case .rightCmdOption:  return HotKey.Mod.rightCommand | HotKey.Mod.rightOption
             case .rightOption:     return HotKey.Mod.rightOption
             case .rightControl:    return HotKey.Mod.rightControl
@@ -63,7 +66,7 @@ final class Settings {
 
     private init() {
         let d = UserDefaults.standard
-        hotkey = HotkeyPreset(rawValue: d.string(forKey: Key.hotkey) ?? "") ?? .rightCmdOption
+        hotkey = HotkeyPreset(rawValue: d.string(forKey: Key.hotkey) ?? "") ?? .rightCmdShift
         localeIdentifier = d.string(forKey: Key.locale) ?? ""
         trailingSpace = d.object(forKey: Key.trailingSpace) as? Bool ?? true
         soundFeedback = d.object(forKey: Key.soundFeedback) as? Bool ?? true

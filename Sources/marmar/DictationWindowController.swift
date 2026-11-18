@@ -1,6 +1,15 @@
 import AppKit
 import SwiftUI
 
+/// A panel that can never take keyboard focus. Critical: the HUD contains a
+/// `TextEditor` (an editable NSTextView) which would otherwise grab first
+/// responder and make the panel key when shown — then the synthesized Cmd+V
+/// paste would land in the HUD instead of the app being dictated into.
+private final class HUDPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 /// Hosts `DictationView` in a floating **non-activating** panel.
 ///
 /// This is deliberately an `NSPanel` with `.nonactivatingPanel`: dictation
@@ -36,8 +45,13 @@ final class DictationWindowController {
         if let panel { return panel }
 
         let hosting = NSHostingController(rootView: DictationView(state: state))
-        let panel = NSPanel(contentViewController: hosting)
-        panel.styleMask = [.titled, .closable, .nonactivatingPanel, .hudWindow, .utilityWindow]
+        let panel = HUDPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 240),
+            styleMask: [.titled, .closable, .nonactivatingPanel, .hudWindow, .utilityWindow],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentViewController = hosting
         panel.title = "marmar"
         panel.isFloatingPanel = true
         panel.level = .floating

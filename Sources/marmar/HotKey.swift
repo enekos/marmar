@@ -36,12 +36,22 @@ final class HotKey {
     /// Returns false if the event tap couldn't be created (Accessibility not granted).
     @discardableResult
     func start() -> Bool {
+        if !AXIsProcessTrusted() {
+            Log.log("[hotkey] Accessibility not granted, cannot create global hotkey.")
+            return false
+        }
+
         let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
-        let callback: CGEventTapCallBack = { _, type, event, refcon in
+        let callback: CGEventTapCallBack = { proxy, type, event, refcon in
             guard let refcon else { return Unmanaged.passUnretained(event) }
             let me = Unmanaged<HotKey>.fromOpaque(refcon).takeUnretainedValue()
             if type == .flagsChanged {
                 me.handle(event)
+            } else if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                Log.log("[hotkey] tap disabled (\(type == .tapDisabledByTimeout ? "timeout" : "userInput")) — re-enabling")
+                if let tap = me.tap {
+                    CGEvent.tapEnable(tap: tap, enable: true)
+                }
             }
             return Unmanaged.passUnretained(event)
         }
@@ -54,8 +64,10 @@ final class HotKey {
             callback: callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
+            Log.log("[hotkey] tap creation FAILED — Accessibility not granted?")
             return false
         }
+        Log.log("[hotkey] event tap created + enabled (mask=0x\(String(requiredMask, radix: 16)))")
 
         self.tap = tap
         let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
@@ -81,9 +93,11 @@ final class HotKey {
         let held = (event.flags.rawValue & requiredMask) == requiredMask
         if held && !isDown {
             isDown = true
+            Log.log("[hotkey] chord DOWN")
             onDown?()
         } else if !held && isDown {
             isDown = false
+            Log.log("[hotkey] chord UP")
             onUp?()
         }
     }

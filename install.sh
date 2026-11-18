@@ -30,6 +30,14 @@ fi
 echo "→ enabling launch at login"
 "$APP_DST/Contents/MacOS/marmar" --register-login || true
 
+# marmar is ad-hoc signed, so its code hash changes on every rebuild and macOS
+# silently invalidates the old Microphone/Accessibility grants (the checkbox can
+# even still look enabled while pointing at a dead hash → hotkey does nothing).
+# Reset both here so the fresh launch below re-prompts cleanly every reinstall.
+echo "→ resetting stale permission grants (you'll re-grant on launch)"
+tccutil reset Accessibility "$LABEL" 2>/dev/null || true
+tccutil reset Microphone "$LABEL" 2>/dev/null || true
+
 echo "→ starting marmar"
 open "$APP_DST"
 
@@ -38,6 +46,10 @@ echo "✓ marmar installed, started, and set to launch at login."
 echo "  Manage everything from the menu-bar icon ▸ Settings… (⌘,)"
 echo "  Uninstall: ./uninstall.sh"
 echo
+echo "  Permissions were reset, so you MUST re-grant them now:"
+echo "   1. Click Allow on the Microphone prompt."
+echo "   2. System Settings ▸ Privacy & Security ▸ Accessibility → enable marmar."
+echo "   3. Relaunch marmar (the hotkey tap is only checked at launch):"
+echo "        open \"$APP_DST\""
 echo "  If macOS shows marmar under Login Items as 'needs approval', enable it"
-echo "  in System Settings ▸ General ▸ Login Items. Re-grant Microphone +"
-echo "  Accessibility if prompted (the code signature changed)."
+echo "  in System Settings ▸ General ▸ Login Items."

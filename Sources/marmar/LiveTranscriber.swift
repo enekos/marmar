@@ -120,24 +120,28 @@ final class LiveTranscriber {
         // volatile results update the live preview.
         resultsTask = Task { [weak self] in
             guard let self, let transcriber = self.transcriber else { return }
+            var count = 0
             do {
                 for try await result in transcriber.results {
                     let text = String(result.text.characters)
                     if result.isFinal {
                         self.finalized += text
                         self.volatile = ""
+                        count += 1
                     } else {
                         self.volatile = text
                     }
                     let live = (self.finalized + self.volatile)
                     DispatchQueue.main.async { self.onLiveUpdate?(live) }
                 }
+                Log.log("[transcriber] results stream ended (\(count) final segments)")
             } catch {
-                // Stream ended or errored; nothing to do — finish() returns what we have.
+                Log.log("[transcriber] results stream error: \(error.localizedDescription)")
             }
         }
 
         try await analyzer.start(inputSequence: stream)
+        Log.log("[transcriber] analyzer started (locale=\(resolvedLocale.identifier))")
     }
 
     /// Feed one microphone buffer, converting to the analyzer's format.
@@ -148,21 +152,56 @@ final class LiveTranscriber {
     }
 
     /// Stop input, flush the analyzer, and return the final transcript.
+    ///
+    /// The drain (`finalizeAndFinishThroughEndOfInput()` + waiting for the results
+    /// stream to end) is capped by a timeout: if SpeechAnalyzer ever fails to
+    /// terminate the stream, we still return the text we have instead of hanging
+    /// forever — which would otherwise leave the controller stuck in
+    /// `.transcribing` and make the hotkey appear dead.
     func finish() async -> String {
+        Log.log("[transcriber] finish() begin")
         inputBuilder?.finish()
-        do {
-            try await analyzer?.finalizeAndFinishThroughEndOfInput()
-        } catch {
-            // fall through — return whatever finalized text we accumulated
+
+        let analyzer = self.analyzer
+        let resultsTask = self.resultsTask
+        let drain = Task {
+            do {
+                try await analyzer?.finalizeAndFinishThroughEndOfInput()
+            } catch {
+                Log.log("[transcriber] finalize error: \(error.localizedDescription)")
+            }
+            await resultsTask?.value
         }
-        await resultsTask?.value
 
-        analyzer = nil
-        transcriber = nil
-        inputBuilder = nil
-        resultsTask = nil
+        let timedOut = await Self.raceTimeout(seconds: 6) { await drain.value }
+        if timedOut {
+            Log.log("[transcriber] finish() TIMED OUT after 6s — returning partial text")
+            drain.cancel()
+            resultsTask?.cancel()
+        }
 
-        return finalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.analyzer = nil
+        self.transcriber = nil
+        self.inputBuilder = nil
+        self.resultsTask = nil
+
+        let out = finalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        Log.log("[transcriber] finish() done (\(out.count) chars)")
+        return out
+    }
+
+    /// Run `operation`, returning true if it exceeded `seconds` (else false).
+    private static func raceTimeout(seconds: Double, _ operation: @escaping () async -> Void) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await operation(); return false }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return true
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: - Format conversion

@@ -9,6 +9,10 @@ enum TextInserter {
     static func insert(_ text: String) {
         guard !text.isEmpty else { return }
 
+        let frontApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
+        let keyWin = NSApp.keyWindow?.title ?? "none"
+        Log.log("[paste] inserting \(text.count) chars — frontmost app=\(frontApp), our keyWindow=\(keyWin)")
+
         let pasteboard = NSPasteboard.general
         let saved = pasteboard.string(forType: .string)
 
@@ -16,6 +20,7 @@ enum TextInserter {
         pasteboard.setString(text, forType: .string)
 
         paste()
+        Log.log("[paste] Cmd+V posted")
 
         // Restore the user's clipboard shortly after the paste has been read by
         // the target app.
